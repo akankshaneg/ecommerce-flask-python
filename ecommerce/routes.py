@@ -67,11 +67,12 @@ def displayCategory():
     categoryId = request.args.get("categoryId")
 
     productDetailsByCategoryId = Product.query.join(ProductCategory, Product.productid == ProductCategory.productid) \
-                                    .add_columns(Product.productid, Product.product_name, Product.regular_price, Product.discounted_price, Product.image) \
-                                    .join(Category, Category.categoryid == ProductCategory.categoryid)\
-                                    .filter(Category.categoryid == int(categoryId))\
-                                    .add_columns(Category.category_name)\
-                                    .all()
+        .add_columns(Product.productid, Product.product_name, Product.regular_price, Product.discounted_price,
+                     Product.image) \
+        .join(Category, Category.categoryid == ProductCategory.categoryid) \
+        .filter(Category.categoryid == int(categoryId)) \
+        .add_columns(Category.category_name) \
+        .all()
 
     categoryName = productDetailsByCategoryId[0].category_name
     data = massageItemData(productDetailsByCategoryId)
@@ -98,3 +99,70 @@ def addToCart():
         return redirect(url_for('root'))
     else:
         return redirect(url_for('loginForm'))
+
+
+@app.route("/cart")
+def cart():
+    if isUserLoggedIn():
+        loggedIn, firstName, productCountinKartForGivenUser = getLoginUserDetails()
+        cartdetails, totalsum, tax = getusercartdetails();
+        return render_template("cart.html", cartData=cartdetails,
+                               productCountinKartForGivenUser=productCountinKartForGivenUser, loggedIn=loggedIn,
+                               firstName=firstName, totalsum=totalsum, tax=tax)
+    else:
+        return redirect(url_for('root'))
+
+
+@app.route("/admin/products", methods=['GET'])
+def getProducts():
+    products = Product.query.all()
+    return render_template('adminProducts.html', products = products)
+
+
+@app.route("/admin/products/new", methods=['GET', 'POST'])
+def addProduct():
+    form = addProductForm()
+    if form.validate_on_submit():
+        product = Product(sku=form.sku.data, product_name=form.productName.data,
+                          description=form.productDescription.data, image='somefile.png', quantity=form.productQuantity.data, discounted_price=15, product_rating=0, product_review=" ", regular_price=form.productPrice.data)
+        db.session.add(product)
+        db.session.commit()
+        flash(f'Product {form.productName}! added successfully', 'success')
+        return redirect(url_for('root'))
+    return render_template("addProduct.html", form=form)
+
+
+@app.route("/admin/product/<int:product_id>", methods=['GET', 'POST'])
+def product(product_id):
+    product = Product.query.get_or_404(product_id)
+    return render_template('adminEditProduct.html', product=product)
+        # return redirect(url_for('loginForm'))
+
+
+@app.route("/removeFromCart")
+def removeFromCart():
+    if isUserLoggedIn():
+        productId = int(request.args.get('productId'))
+        removeProductFromCart(productId)
+        return redirect(url_for('cart'))
+    else:
+        return redirect(url_for('loginForm'))
+
+
+@app.route("/checkoutPage")
+def checkoutForm():
+    if isUserLoggedIn():
+        cartdetails, totalsum, tax = getusercartdetails()
+        return render_template("checkoutPage.html", cartData=cartdetails, totalsum=totalsum, tax=tax)
+    else:
+        return redirect(url_for('loginForm'))
+
+
+@app.route("/createOrder", methods=['GET', 'POST'])
+def createOrder():
+    totalsum = request.args.get('total')
+    email, username,ordernumber,address,fullname,phonenumber= extractOrderdetails(request, totalsum)
+    if email:
+        sendEmailconfirmation(email, username,ordernumber)
+    return render_template("OrderPage.html", email=email, username=username,ordernumber=ordernumber,address=address,fullname=fullname,phonenumber=phonenumber)
+
